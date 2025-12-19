@@ -4,10 +4,19 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const helper_mod = b.addModule("helper", .{
+        .root_source_file = b.path("src/helper.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const pcap_mod = b.addModule("pcap", .{
         .root_source_file = b.path("src/input/pcap/pcap.zig"),
         .target = target,
         .optimize = optimize,
+        .imports = &.{
+            .{ .name = "helper", .module = helper_mod },
+        },
     });
 
     const exe = b.addExecutable(.{
@@ -16,6 +25,9 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .name = "pcap", .module = pcap_mod },
+            },
         }),
     });
 

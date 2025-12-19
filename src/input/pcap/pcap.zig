@@ -1,4 +1,5 @@
 const std = @import("std");
+const helper = @import("helper");
 
 pub const LinkType = enum(u32) {
     ethernet = 1,
@@ -36,26 +37,6 @@ pub const PcapError = error{
     InvalidRecord,
 };
 
-fn readExact(r: anytype, buf: []u8) !void {
-    var off: usize = 0;
-    while (off < buf.len) {
-        const chunk = r.*.interface.take(buf.len - off) catch |err| switch (err) {
-            error.EndOfStream => return PcapError.TruncatedFile,
-            else => return err,
-        };
-        std.mem.copyForwards(u8, buf[off .. off + chunk.len], chunk);
-        off += chunk.len;
-    }
-}
-
-fn readInt(comptime T: type, endian: std.builtin.Endian, bytes: []const u8) T {
-    comptime {
-        if (@typeInfo(T) != .int) @compileError("T must be an integer type");
-    }
-    std.debug.assert(bytes.len >= @sizeOf(T));
-    return std.mem.readInt(T, bytes[0..@sizeOf(T)], endian);
-}
-
 fn parseGlobalHeader(buf: *const [24]u8) !PcapMetadata {
     const b = buf.*;
     const magic = b[0..4];
@@ -78,11 +59,11 @@ fn parseGlobalHeader(buf: *const [24]u8) !PcapMetadata {
         return PcapError.UnsupportedFormat;
     }
 
-    _ = readInt(u16, meta.endianness, b[4..6]);
-    _ = readInt(u16, meta.endianness, b[6..8]);
+    _ = helper.readInt(u16, meta.endianness, b[4..6]);
+    _ = helper.readInt(u16, meta.endianness, b[6..8]);
 
-    meta.snaplen = readInt(u32, meta.endianness, b[16..20]);
-    const network = readInt(u32, meta.endianness, b[20..24]);
+    meta.snaplen = helper.readInt(u32, meta.endianness, b[16..20]);
+    const network = helper.readInt(u32, meta.endianness, b[20..24]);
     meta.linktype = LinkType.fromU32(network);
 
     return meta;
@@ -115,7 +96,7 @@ pub const Reader = struct {
         self.r = self.file.reader(&self.io_buf);
 
         var hdr_bytes: [24]u8 = undefined;
-        try readExact(&self.r, hdr_bytes[0..]);
+        try helper.readExact(&self.r, hdr_bytes[0..]);
 
         self.meta = try parseGlobalHeader(&hdr_bytes);
 
@@ -142,12 +123,12 @@ pub const Reader = struct {
         };
 
         hdr[0] = first[0];
-        try readExact(&self.r, hdr[1..]);
+        try helper.readExact(&self.r, hdr[1..]);
 
-        const ts_sec = readInt(u32, self.meta.endianness, hdr[0..4]);
-        const ts_frac = readInt(u32, self.meta.endianness, hdr[4..8]);
-        const cap_len = readInt(u32, self.meta.endianness, hdr[8..12]);
-        const len = readInt(u32, self.meta.endianness, hdr[12..16]);
+        const ts_sec = helper.readInt(u32, self.meta.endianness, hdr[0..4]);
+        const ts_frac = helper.readInt(u32, self.meta.endianness, hdr[4..8]);
+        const cap_len = helper.readInt(u32, self.meta.endianness, hdr[8..12]);
+        const len = helper.readInt(u32, self.meta.endianness, hdr[12..16]);
 
         if (cap_len > self.meta.snaplen) return PcapError.InvalidRecord;
         if (cap_len > len) return PcapError.InvalidRecord;
@@ -162,7 +143,7 @@ pub const Reader = struct {
             }
         }
 
-        try readExact(&self.r, self.buffer[0..need]);
+        try helper.readExact(&self.r, self.buffer[0..need]);
 
         return Packet{
             .ts_sec = ts_sec,

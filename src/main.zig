@@ -1,4 +1,4 @@
-const pcap = @import("input/pcap/pcap.zig");
+const pcap = @import("pcap");
 const std = @import("std");
 
 pub fn main() !void {
