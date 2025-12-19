@@ -1,0 +1,54 @@
+const pcap = @import("pcap");
+
+const ethernet = @import("ethernet.zig");
+const ipv4 = @import("ipv4.zig");
+const tcp = @import("tcp.zig");
+const udp = @import("udp.zig");
+
+pub const DecodeError = error{
+    UnsupportedLinkType,
+};
+
+pub const DecodedPacket = struct {
+    ethernet: ?ethernet.EthernetFrame = null,
+    ipv4: ?ipv4.Ipv4Packet = null,
+    tcp: ?tcp.TcpSegment = null,
+    udp: ?udp.UdpDatagram = null,
+
+    pub fn decode(data: []const u8, linktype: pcap.LinkType) DecodeError!DecodedPacket {
+        var pkt = DecodedPacket{};
+
+        var next_data: []const u8 = data;
+
+        // Layer 2
+        switch (linktype) {
+            .ethernet => {
+                pkt.ethernet = ethernet.parse(next_data) catch return pkt;
+                next_data = pkt.ethernet.?.payload;
+            },
+            else => return DecodeError.UnsupportedLinkType,
+        }
+
+        // Layer 3
+        switch (pkt.ethernet.?.ether_type) {
+            .ipv4 => {
+                pkt.ipv4 = ipv4.parse(next_data) catch return pkt;
+                next_data = pkt.ipv4.?.payload;
+            },
+            .ipv6 => {
+                // TODO: ipv6 parsing
+                return pkt;
+            },
+            else => return pkt,
+        }
+
+        // Layer 4
+        switch (pkt.ipv4.?.protocol) {
+            .tcp => pkt.tcp = tcp.parse(next_data) catch null,
+            .udp => pkt.udp = udp.parse(next_data) catch null,
+            else => {},
+        }
+
+        return pkt;
+    }
+};
