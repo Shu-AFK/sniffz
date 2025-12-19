@@ -4,6 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const clap = b.dependency("clap", .{});
+
     const helper_mod = b.addModule("helper", .{
         .root_source_file = b.path("src/helper.zig"),
         .target = target,
@@ -27,6 +29,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "pcap", .module = pcap_mod },
+                .{ .name = "clap", .module = clap.module("clap") },
             },
         }),
     });

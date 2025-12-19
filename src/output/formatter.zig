@@ -1,9 +1,27 @@
 const std = @import("std");
 const packet = @import("../protocols/packet.zig");
 const ethernet = @import("../protocols/ethernet.zig");
+const hexdump = @import("hexdump.zig");
 
-pub fn format(writer: anytype, index: usize, pkt: packet.DecodedPacket) !void {
+pub const fflags = struct {
+    verbose: bool,
+    hexdump: bool,
+};
+
+pub fn format(writer: anytype, index: usize, pkt: packet.DecodedPacket, raw: []const u8, flags: fflags) !void {
     try writer.print("#{d:<4} ", .{index});
+
+    // Verbose: show ethernet info
+    if (flags.verbose) {
+        if (pkt.ethernet) |eth| {
+            var src_buf: [17]u8 = undefined;
+            var dst_buf: [17]u8 = undefined;
+            try writer.print("{s} -> {s} ", .{
+                eth.srcMacStr(&src_buf),
+                eth.dstMacStr(&dst_buf),
+            });
+        }
+    }
 
     if (pkt.ipv4) |ip| {
         var src_buf: [15]u8 = undefined;
@@ -33,5 +51,9 @@ pub fn format(writer: anytype, index: usize, pkt: packet.DecodedPacket) !void {
         }
     } else {
         try writer.print("???\n", .{});
+    }
+
+    if (flags.hexdump) {
+        try hexdump.dump(writer, raw);
     }
 }
