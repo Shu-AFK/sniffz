@@ -2,6 +2,7 @@ const pcap = @import("pcap");
 
 const ethernet = @import("ethernet.zig");
 const ipv4 = @import("ipv4.zig");
+const ipv6 = @import("ipv6.zig");
 const tcp = @import("tcp.zig");
 const udp = @import("udp.zig");
 
@@ -12,6 +13,7 @@ pub const DecodeError = error{
 pub const DecodedPacket = struct {
     ethernet: ?ethernet.EthernetFrame = null,
     ipv4: ?ipv4.Ipv4Packet = null,
+    ipv6: ?ipv6.Ipv6Packet = null,
     tcp: ?tcp.TcpSegment = null,
     udp: ?udp.UdpDatagram = null,
 
@@ -36,17 +38,25 @@ pub const DecodedPacket = struct {
                 next_data = pkt.ipv4.?.payload;
             },
             .ipv6 => {
-                // TODO: ipv6 parsing
-                return pkt;
+                pkt.ipv6 = ipv6.parse(next_data) catch return pkt;
+                next_data = pkt.ipv6.?.payload;
             },
             else => return pkt,
         }
 
         // Layer 4
-        switch (pkt.ipv4.?.protocol) {
-            .tcp => pkt.tcp = tcp.parse(next_data) catch null,
-            .udp => pkt.udp = udp.parse(next_data) catch null,
-            else => {},
+        if (pkt.ipv4) |ip4| {
+            switch (ip4.protocol) {
+                .tcp => pkt.tcp = tcp.parse(next_data) catch null,
+                .udp => pkt.udp = udp.parse(next_data) catch null,
+                else => {},
+            }
+        } else if (pkt.ipv6) |ip6| {
+            switch (ip6.next_header) {
+                .tcp => pkt.tcp = tcp.parse(next_data) catch null,
+                .udp => pkt.udp = udp.parse(next_data) catch null,
+                else => {},
+            }
         }
 
         return pkt;
