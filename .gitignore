@@ -11,3 +11,6 @@ zig-out/
 # OS files
 .DS_Store
 Thumbs.db
+
+testdata/pcap_orig/
+anon.sh

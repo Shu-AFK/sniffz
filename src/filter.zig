@@ -1,6 +1,7 @@
 const packet = @import("protocols/packet.zig");
 const ipv4 = @import("protocols/ipv4.zig");
 const ipv6 = @import("protocols/ipv6.zig");
+const icmp = @import("protocols/icmp.zig");
 
 const std = @import("std");
 
@@ -12,6 +13,11 @@ pub const IpAddr = union(enum) {
 pub const Filter = union(enum) {
     tcp,
     udp,
+
+    icmp,
+    icmp4,
+    icmp6,
+
     port: u16,
     src: IpAddr,
     dst: IpAddr,
@@ -27,6 +33,12 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) ![]Filter {
             try filters.append(allocator, .tcp);
         } else if (std.mem.eql(u8, token, "udp")) {
             try filters.append(allocator, .udp);
+        } else if (std.mem.eql(u8, token, "icmp")) {
+            try filters.append(allocator, .icmp);
+        } else if (std.mem.eql(u8, token, "icmp4")) {
+            try filters.append(allocator, .icmp4);
+        } else if (std.mem.eql(u8, token, "icmp6")) {
+            try filters.append(allocator, .icmp6);
         } else if (std.mem.eql(u8, token, "port")) {
             const portStr = it.next() orelse return error.MissingPort;
             const port = std.fmt.parseInt(u16, portStr, 10) catch return error.InvalidPort;
@@ -67,11 +79,35 @@ fn matchesSingle(pkt: packet.DecodedPacket, filter: Filter) bool {
     return switch (filter) {
         .tcp => pkt.tcp != null,
         .udp => pkt.udp != null,
+
+        .icmp => pkt.icmp != null,
+
+        .icmp4 => blk: {
+            if (pkt.icmp) |p| {
+                break :blk switch (p) {
+                    .v4 => true,
+                    .v6 => false,
+                };
+            }
+            break :blk false;
+        },
+
+        .icmp6 => blk: {
+            if (pkt.icmp) |p| {
+                break :blk switch (p) {
+                    .v4 => false,
+                    .v6 => true,
+                };
+            }
+            break :blk false;
+        },
+
         .port => |p| {
             if (pkt.tcp) |t| return t.src_port == p or t.dst_port == p;
             if (pkt.udp) |u| return u.src_port == p or u.dst_port == p;
             return false;
         },
+
         .src => |addr| matchAddr(pkt, addr, .src),
         .dst => |addr| matchAddr(pkt, addr, .dst),
         .ip => |addr| matchAddr(pkt, addr, .src) or matchAddr(pkt, addr, .dst),
@@ -90,6 +126,7 @@ fn matchAddr(pkt: packet.DecodedPacket, addr: IpAddr, dir: Direction) bool {
         },
         .v6 => |v6| {
             if (pkt.ipv6) |ip| {
+                // IMPORTANT: adjust these field names if your ipv6 struct uses src_ip/dst_ip instead.
                 const pkt_addr = if (dir == .src) ip.src else ip.dst;
                 return std.mem.eql(u8, &pkt_addr, &v6);
             }

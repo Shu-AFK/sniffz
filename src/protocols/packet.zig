@@ -5,6 +5,7 @@ const ipv4 = @import("ipv4.zig");
 const ipv6 = @import("ipv6.zig");
 const tcp = @import("tcp.zig");
 const udp = @import("udp.zig");
+const icmp = @import("icmp.zig");
 
 pub const DecodeError = error{
     UnsupportedLinkType,
@@ -16,6 +17,7 @@ pub const DecodedPacket = struct {
     ipv6: ?ipv6.Ipv6Packet = null,
     tcp: ?tcp.TcpSegment = null,
     udp: ?udp.UdpDatagram = null,
+    icmp: ?icmp.Icmp = null,
 
     pub fn decode(data: []const u8, linktype: pcap.LinkType) DecodeError!DecodedPacket {
         var pkt = DecodedPacket{};
@@ -49,12 +51,14 @@ pub const DecodedPacket = struct {
             switch (ip4.protocol) {
                 .tcp => pkt.tcp = tcp.parse(next_data) catch null,
                 .udp => pkt.udp = udp.parse(next_data) catch null,
+                .icmp => pkt.icmp = icmp.Icmp.parse(.v4, next_data) catch null,
                 else => {},
             }
         } else if (pkt.ipv6) |ip6| {
             switch (ip6.next_header) {
                 .tcp => pkt.tcp = tcp.parse(next_data) catch null,
                 .udp => pkt.udp = udp.parse(next_data) catch null,
+                .icmpv6 => pkt.icmp = icmp.Icmp.parse(.v6, next_data) catch null,
                 else => {},
             }
         }
