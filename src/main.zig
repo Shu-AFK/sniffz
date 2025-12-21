@@ -2,6 +2,7 @@ const std = @import("std");
 const clap = @import("clap");
 const pcap = @import("pcap");
 
+const filter = @import("filter.zig");
 const packet = @import("protocols/packet.zig");
 const formatter = @import("output/formatter.zig");
 
@@ -15,10 +16,11 @@ pub fn main() !void {
     const stdout = &stdout_writer.interface;
 
     const params = comptime clap.parseParamsComptime(
-        \\-h, --help     Display this help and exit.
-        \\-v, --verbose  Show verbose output (ethernet info).
-        \\-x, --hexdump  Print the hexdump of each packet.
-        \\<str>          PCAP file to read.
+        \\-h, --help             Display this help and exit.
+        \\-v, --verbose          Show verbose output (ethernet info).
+        \\-x, --hexdump          Print the hexdump of each packet.
+        \\-f, --filter <str>     Filter by port, ip or protocol.
+        \\<str>                  PCAP file to read.
         \\
     );
 
@@ -48,6 +50,12 @@ pub fn main() !void {
     const verbose = res.args.verbose != 0;
     const hexdump = res.args.hexdump != 0;
 
+    const filters = if (res.args.filter) |f|
+        try filter.parse(allocator, f)
+    else
+        &[_]filter.Filter{};
+    defer if (res.args.filter != null) allocator.free(filters);
+
     try stdout.print("sniffz - packet sniffer in zig\n", .{});
     try stdout.print("opening pcap: {s}\n", .{path});
     try stdout.flush();
@@ -65,7 +73,9 @@ pub fn main() !void {
             continue;
         };
 
-        try formatter.format(stdout, count, dec, pkt.data, .{ .verbose = verbose, .hexdump = hexdump });
+        if (filter.matches(dec, filters)) {
+            try formatter.format(stdout, count, dec, pkt.data, .{ .verbose = verbose, .hexdump = hexdump });
+        }
         try stdout.flush();
     }
 

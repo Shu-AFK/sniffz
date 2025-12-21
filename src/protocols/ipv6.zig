@@ -177,3 +177,56 @@ fn longestZeroRun(h: [8]u16) ZeroRun {
 
     return best;
 }
+
+pub fn parseIpStr(str: []const u8) ![16]u8 {
+    var result: [16]u8 = .{0} ** 16;
+    var hextets: [8]u16 = .{0} ** 8;
+
+    if (std.mem.indexOf(u8, str, "::")) |pos| {
+        const left = str[0..pos];
+        const right = str[pos + 2 ..];
+
+        var left_count: usize = 0;
+        if (left.len > 0) {
+            var it = std.mem.splitScalar(u8, left, ':');
+            while (it.next()) |part| {
+                if (left_count >= 8) return error.InvalidIp;
+                hextets[left_count] = std.fmt.parseInt(u16, part, 16) catch return error.InvalidIp;
+                left_count += 1;
+            }
+        }
+
+        var right_parts: [8]u16 = undefined;
+        var right_count: usize = 0;
+        if (right.len > 0) {
+            var it = std.mem.splitScalar(u8, right, ':');
+            while (it.next()) |part| {
+                if (right_count >= 8) return error.InvalidIp;
+                right_parts[right_count] = std.fmt.parseInt(u16, part, 16) catch return error.InvalidIp;
+                right_count += 1;
+            }
+        }
+
+        if (left_count + right_count > 8) return error.InvalidIp;
+
+        const right_start = 8 - right_count;
+        for (0..right_count) |i| {
+            hextets[right_start + i] = right_parts[i];
+        }
+    } else {
+        var it = std.mem.splitScalar(u8, str, ':');
+        var i: usize = 0;
+        while (it.next()) |part| {
+            if (i >= 8) return error.InvalidIp;
+            hextets[i] = std.fmt.parseInt(u16, part, 16) catch return error.InvalidIp;
+            i += 1;
+        }
+        if (i != 8) return error.InvalidIp;
+    }
+
+    for (0..8) |i| {
+        std.mem.writeInt(u16, result[i * 2 ..][0..2], hextets[i], .big);
+    }
+
+    return result;
+}

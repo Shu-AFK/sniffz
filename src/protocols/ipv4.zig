@@ -84,3 +84,18 @@ pub fn parse(data: []const u8) ParseError!Ipv4Packet {
         .payload = data[header_len..],
     };
 }
+
+pub fn parseIpStr(str: []const u8) ![4]u8 {
+    var ip: [4]u8 = undefined;
+    var it = std.mem.splitScalar(u8, str, '.');
+    var i: usize = 0;
+
+    while (it.next()) |seg| {
+        if (i >= 4) return error.InvalidIp;
+        ip[i] = std.fmt.parseInt(u8, seg, 10) catch return error.InvalidIp;
+        i += 1;
+    }
+
+    if (i != 4) return error.InvalidIp;
+    return ip;
+}
